@@ -11,7 +11,7 @@
   --ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; --mono:"Cascadia Mono",Consolas,monospace;
 }
 [data-theme=dark]{
-  --desk:#101318; --panel:#1A1E25; --ink:#E9ECF1; --muted:#9AA3B2; --line:#2B313B; --hover:#242A33;
+  --paper:#222730; --desk:#101318; --panel:#1A1E25; --ink:#E9ECF1; --muted:#9AA3B2; --line:#2B313B; --hover:#242A33;
   --shadow:0 1px 2px #0008,0 6px 18px #0007;
 }
 *{box-sizing:border-box}
@@ -50,7 +50,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .thumb i{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);font:600 11px var(--ui);font-style:normal;padding:1px 8px;border-radius:9px;background:var(--panel);border:1px solid var(--line)}
 .thumb.sel i{background:var(--mark);border-color:var(--mark);color:#18202C}
 
-#stage{flex:1;position:relative;min-width:0;display:flex;flex-direction:column}
+#stage{flex:1;position:relative;min-width:0;display:flex;flex-direction:column;container-type:inline-size}
 #viewer{flex:1;overflow:auto;padding:100px 24px 40px}
 .page{position:relative;margin:0 auto 18px;width:max-content;box-shadow:var(--shadow);background:#fff}
 .page canvas{display:block}
@@ -58,7 +58,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 body.texto #viewer{cursor:text}
 
 /* floating toolbar */
-#tools{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;gap:2px;padding:5px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);align-items:center}
+#tools{max-width:calc(100% - 20px);overflow-x:auto;position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;gap:2px;padding:5px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);align-items:center}
 #tools .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
 #zoomv{min-width:46px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
 #hint{position:absolute;top:66px;left:50%;transform:translateX(-50%);z-index:4;color:var(--muted);font-size:12.5px;pointer-events:none;white-space:nowrap}
@@ -101,7 +101,8 @@ dialog h2{margin:0;padding:18px 22px 6px;font-size:18px}
 select,input[type=text],input[type=number]{background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:6px 8px;font:inherit}
 input[type=text]{width:170px}input[type=number]{width:64px}
 dialog footer{padding:14px 22px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);color:var(--muted)}
-@media (max-width:1100px){.btn .t{display:none}}
+@media (max-width:1100px){#top .btn .t{display:none}}
+@container (max-width:900px){#tools .t{display:none}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
