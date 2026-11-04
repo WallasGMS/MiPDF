@@ -1,7 +1,7 @@
 {
   "name": "mi-pdf",
   "productName": "Mi PDF",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Visor y editor de PDF personal",
   "main": "main.js",
   "author": "WallasGMS",

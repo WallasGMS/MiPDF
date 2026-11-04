@@ -73,10 +73,17 @@ body.loaded #empty{display:none}
 body:not(.loaded) #tools,body:not(.loaded) #hint{display:none}
 
 /* JS drawer */
-#jsp{width:360px;background:var(--panel);border-left:1px solid var(--line);display:none;flex-direction:column}
+#jsp{width:440px;background:var(--panel);border-left:1px solid var(--line);display:none;flex-direction:column}
 #jsp.open{display:flex}
 #jsp header{padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);font-weight:600}
-#jsp pre{flex:1;margin:0;padding:12px;overflow:auto;font:12.5px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word}
+#jslist{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+#jslist .vacio{color:var(--muted);margin:8px 4px}
+.sc{border:1px solid var(--line);border-radius:10px;background:var(--paper);padding:8px;display:flex;flex-direction:column;gap:6px}
+.sc div{display:flex;gap:6px}
+.sc input{flex:1;width:auto!important}
+.sc textarea{width:100%;height:170px;resize:vertical;background:var(--desk);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:8px;font:12.5px/1.5 var(--mono);tab-size:2}
+#jsfoot{padding:10px 12px;border-top:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap}
+#jsfoot .solid{margin-left:auto}
 
 /* toast */
 #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;transition:.2s;z-index:30;display:flex;gap:12px;align-items:center;padding:10px 14px;background:var(--ink);color:var(--paper);border-radius:10px;box-shadow:var(--shadow)}
@@ -142,8 +149,13 @@ dialog footer{padding:14px 22px;display:flex;justify-content:space-between;align
     </div>
   </section>
   <aside id="jsp">
-    <header><span>JavaScript del PDF</span><button class="btn" id="bcopy">Copiar</button></header>
-    <pre id="jscode"></pre>
+    <header><span>JavaScript del PDF</span><button class="btn" id="bjsx" aria-label="Cerrar panel">✕</button></header>
+    <div id="jslist"></div>
+    <div id="jsfoot">
+      <button class="btn" id="jsadd"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Añadir script</button>
+      <button class="btn danger" id="jsclear" title="Quita todo el JavaScript del PDF, incluido el de botones y campos">Quitar todo</button>
+      <button class="btn solid" id="jsapply" disabled>Aplicar al PDF</button>
+    </div>
   </aside>
 </div>
 
@@ -212,7 +224,7 @@ $('sclose').onclick = () => $('dset').close();
 api.version().then(v => $('ver').textContent = 'Mi PDF ' + v);
 
 // ---------- estado ----------
-let bytes, pdf, name = 'documento.pdf', scale = cfg.zoom / 100, tool = null, jsList = [];
+let bytes, pdf, name = 'documento.pdf', scale = cfg.zoom / 100, tool = null, scripts = [], sucio = false;
 let sel = new Set(), last = -1, undo = [];
 
 function toast(msg, act, fn) {
@@ -259,10 +271,7 @@ async function cargar(b, nombre) {
   document.body.classList.add('loaded');
   $('fname').textContent = name;
   pintarSel();
-  jsList = (await doc.getJavaScript().catch(() => null)) || [];
-  $('bjs').classList.toggle('has', jsList.length > 0);
-  $('bjs').title = jsList.length ? `Este PDF lleva ${jsList.length} script(s)` : 'Este PDF no lleva JavaScript';
-  pintarJS();
+  await cargarJS();
 }
 
 function pintarSel() {
@@ -357,11 +366,91 @@ function zoom(d) { scale = Math.min(3, Math.max(.4, +(scale + d).toFixed(2))); $
 $('bzi').onclick = () => zoom(.1); $('bzo').onclick = () => zoom(-.1); $('zoomv').textContent = Math.round(scale * 100) + '%';
 
 // JS del PDF
+const {PDFName, PDFDict, PDFArray, PDFHexString, PDFRawStream, decodePDFRawStream} = PDFLib;
+const N = k => PDFName.of(k);
+const txt = o => !o ? '' : o.decodeText ? o.decodeText() : o instanceof PDFRawStream ? new TextDecoder().decode(decodePDFRawStream(o).decode()) : '';
+function codigoAccion(a) {                       // texto del JS si 'a' es una acción JavaScript, si no null
+  if (!(a instanceof PDFDict)) return null;
+  const t = a.lookup(N('S'));
+  return t && t.toString() === '/JavaScript' ? txt(a.lookup(N('JS'))) : null;
+}
+function leerJS(doc) {
+  const out = [], cat = doc.catalog;
+  const tree = cat.lookupMaybe(N('Names'), PDFDict)?.lookupMaybe(N('JavaScript'), PDFDict);
+  const walk = n => {
+    const arr = n.lookupMaybe(N('Names'), PDFArray);
+    if (arr) for (let i = 0; i + 1 < arr.size(); i += 2) out.push({name: txt(arr.lookup(i)), code: codigoAccion(arr.lookup(i + 1)) ?? ''});
+    const kids = n.lookupMaybe(N('Kids'), PDFArray);
+    if (kids) for (let i = 0; i < kids.size(); i++) walk(kids.lookup(i, PDFDict));
+  };
+  if (tree) walk(tree);
+  const c = codigoAccion(cat.lookup(N('OpenAction')));
+  if (c != null) out.push({name: 'Al abrir', code: c});
+  return out;
+}
+function ponerJS(doc, list) {                    // reemplaza todos los scripts a nivel de documento
+  const cat = doc.catalog, ctx = doc.context;
+  if (codigoAccion(cat.lookup(N('OpenAction'))) != null) cat.delete(N('OpenAction'));
+  let names = cat.lookupMaybe(N('Names'), PDFDict);
+  if (!list.length) return names && names.delete(N('JavaScript'));
+  if (!names) cat.set(N('Names'), names = ctx.obj({}));
+  const arr = ctx.obj([]), usados = new Set();
+  list.map((s, i) => {                           // nombres únicos y ordenados (lo pide el formato PDF)
+    let n = (s.name || '').trim() || 'script' + (i + 1);
+    while (usados.has(n)) n += '_';
+    usados.add(n); return {n, code: s.code};
+  }).sort((a, b) => a.n < b.n ? -1 : 1).forEach(s => {
+    arr.push(PDFHexString.fromText(s.n));
+    arr.push(ctx.register(ctx.obj({S: 'JavaScript', JS: PDFHexString.fromText(s.code)})));
+  });
+  names.set(N('JavaScript'), ctx.obj({Names: arr}));
+}
+function quitarTodoJS(doc) {                     // además: acciones de páginas, botones y campos
+  ponerJS(doc, []);
+  doc.catalog.delete(N('AA'));
+  for (const p of doc.getPages()) {
+    p.node.delete(N('AA'));
+    const an = p.node.lookupMaybe(N('Annots'), PDFArray);
+    if (an) for (let i = 0; i < an.size(); i++) {
+      const d = an.lookupMaybe(i, PDFDict); if (!d) continue;
+      d.delete(N('AA'));
+      if (codigoAccion(d.lookup(N('A'))) != null) d.delete(N('A'));
+    }
+  }
+}
+
+async function cargarJS() {
+  try { scripts = leerJS(await PDFDocument.load(bytes, {ignoreEncryption: true})); } catch { scripts = []; }
+  sucio = false; pintarJS();
+}
+function marcar() { sucio = true; $('jsapply').disabled = false; }
 function pintarJS() {
-  $('jscode').textContent = jsList.length ? jsList.map((s, i) => `// ── script ${i + 1} ──\n${s}`).join('\n\n') : 'Este PDF no lleva JavaScript por dentro.';
+  const box = $('jslist'); box.innerHTML = '';
+  if (!scripts.length) box.innerHTML = '<p class="vacio">Este PDF no lleva JavaScript. Pulsa «Añadir script» para ponerle uno.</p>';
+  scripts.forEach((s, i) => {
+    const c = document.createElement('div'); c.className = 'sc';
+    const nm = Object.assign(document.createElement('input'), {type: 'text', value: s.name, placeholder: 'Nombre del script'});
+    const rm = Object.assign(document.createElement('button'), {className: 'btn danger', title: 'Quitar este script', innerHTML: '<svg class="i" viewBox="0 0 24 24">' + ICONS.trash + '</svg>'});
+    const ta = Object.assign(document.createElement('textarea'), {value: s.code, spellcheck: false, placeholder: '// código JavaScript'});
+    nm.oninput = () => { s.name = nm.value; marcar(); };
+    ta.oninput = () => { s.code = ta.value; marcar(); };
+    ta.onkeydown = e => { if (e.key === 'Tab') { e.preventDefault(); document.execCommand('insertText', false, '  '); } };
+    rm.onclick = () => { scripts.splice(i, 1); pintarJS(); marcar(); };
+    const fila = document.createElement('div'); fila.append(nm, rm);
+    c.append(fila, ta); box.appendChild(c);
+  });
+  $('jsapply').disabled = !sucio;
+  $('bjs').classList.toggle('has', scripts.length > 0);
+  $('bjs').title = scripts.length ? `Este PDF lleva ${scripts.length} script(s)` : 'Este PDF no lleva JavaScript';
 }
 $('bjs').onclick = () => $('jsp').classList.toggle('open');
-$('bcopy').onclick = () => navigator.clipboard.writeText($('jscode').textContent).then(() => toast('Copiado'));
+$('bjsx').onclick = () => $('jsp').classList.remove('open');
+$('jsadd').onclick = () => {
+  scripts.push({name: 'script' + (scripts.length + 1), code: '// Se ejecuta al abrir el PDF en Acrobat u otro lector\napp.alert("Hola");'});
+  pintarJS(); marcar(); $('jslist').scrollTop = 1e6;
+};
+$('jsapply').onclick = () => editar(d => ponerJS(d, scripts), 'Scripts aplicados al PDF');
+$('jsclear').onclick = () => editar(d => quitarTodoJS(d), 'JavaScript quitado del PDF');
 
 // abrir
 async function abrirArchivo() { const f = await api.open(); if (f) nuevo(f.data, f.name); }
