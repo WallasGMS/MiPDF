@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:">
+<title>Mi PDF</title>
+<style>
+:root{
+  --desk:#E4E7EC; --panel:#F6F7F9; --paper:#fff; --ink:#18202C; --muted:#667085; --line:#D3D8E0;
+  --mark:#FFD23F; --danger:#C2362B; --hover:#E9ECF1; --shadow:0 1px 2px #18202C26,0 6px 18px #18202C1F;
+  --ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; --mono:"Cascadia Mono",Consolas,monospace;
+}
+[data-theme=dark]{
+  --desk:#101318; --panel:#1A1E25; --ink:#E9ECF1; --muted:#9AA3B2; --line:#2B313B; --hover:#242A33;
+  --shadow:0 1px 2px #0008,0 6px 18px #0007;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:14px/1.4 var(--ui);background:var(--desk);color:var(--ink);display:flex;flex-direction:column;overflow:hidden}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+[data-theme=light] :focus-visible{outline-color:var(--ink)}
+
+/* top bar */
+#top{display:flex;align-items:center;gap:10px;height:52px;padding:0 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.01em}
+.logo span{background:linear-gradient(transparent 58%,var(--mark) 58% 92%,transparent 92%);padding:0 3px}
+#fname{flex:1;text-align:center;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;border:1px solid transparent;border-radius:8px;background:transparent}
+.btn:hover:not(:disabled){background:var(--hover)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.solid{background:var(--ink);color:var(--paper)}
+[data-theme=dark] .btn.solid{color:#101318}
+.btn.solid:hover:not(:disabled){background:var(--ink);filter:brightness(1.15)}
+.btn.on{background:var(--mark);color:#18202C}
+.btn.danger:hover:not(:disabled){background:#C2362B1F;color:var(--danger)}
+.btn.pulse{background:var(--mark);color:#18202C}
+.btn.has{position:relative}.btn.has::after{content:'';position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:var(--mark);box-shadow:0 0 0 2px var(--panel)}
+
+/* body */
+#main{flex:1;display:flex;min-height:0}
+#side{width:176px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column}
+#side header{padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);font-weight:600}
+#side header button{border:0;background:none;color:var(--muted);text-decoration:underline;padding:0}
+#thumbs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:12px;align-items:center}
+.thumb{position:relative;border:0;padding:0;background:none;border-radius:4px}
+.thumb canvas{display:block;background:#fff;box-shadow:var(--shadow);border-radius:2px;outline:3px solid transparent;outline-offset:1px}
+.thumb.sel canvas{outline-color:var(--mark)}
+.thumb i{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);font:600 11px var(--ui);font-style:normal;padding:1px 8px;border-radius:9px;background:var(--panel);border:1px solid var(--line)}
+.thumb.sel i{background:var(--mark);border-color:var(--mark);color:#18202C}
+
+#stage{flex:1;position:relative;min-width:0;display:flex;flex-direction:column}
+#viewer{flex:1;overflow:auto;padding:100px 24px 40px}
+.page{position:relative;margin:0 auto 18px;width:max-content;box-shadow:var(--shadow);background:#fff}
+.page canvas{display:block}
+.page .tin{position:absolute;transform:translateY(-100%);border:1.5px dashed #18202C;background:#FFD23F66;color:#000;font-family:Helvetica,Arial,sans-serif;padding:0 3px;outline:0;min-width:80px}
+body.texto #viewer{cursor:text}
+
+/* floating toolbar */
+#tools{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;gap:2px;padding:5px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);align-items:center}
+#tools .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+#zoomv{min-width:46px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
+#hint{position:absolute;top:66px;left:50%;transform:translateX(-50%);z-index:4;color:var(--muted);font-size:12.5px;pointer-events:none;white-space:nowrap}
+
+/* empty state */
+#empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;z-index:3;background:var(--desk)}
+#empty h1{margin:0;font-size:26px;letter-spacing:-.02em}
+#empty p{margin:0;color:var(--muted);max-width:360px}
+#empty .drop{padding:38px 56px;border:2px dashed var(--line);border-radius:18px;display:flex;flex-direction:column;align-items:center;gap:14px}
+body.over #empty .drop{border-color:var(--mark);background:#FFD23F22}
+body.loaded #empty{display:none}
+body:not(.loaded) #tools,body:not(.loaded) #hint{display:none}
+
+/* JS drawer */
+#jsp{width:360px;background:var(--panel);border-left:1px solid var(--line);display:none;flex-direction:column}
+#jsp.open{display:flex}
+#jsp header{padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);font-weight:600}
+#jsp pre{flex:1;margin:0;padding:12px;overflow:auto;font:12.5px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word}
+
+/* toast */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;transition:.2s;z-index:30;display:flex;gap:12px;align-items:center;padding:10px 14px;background:var(--ink);color:var(--paper);border-radius:10px;box-shadow:var(--shadow)}
+[data-theme=dark] #toast{color:#101318}
+#toast.show{opacity:1;transform:translateX(-50%);pointer-events:auto}
+#toast button{border:0;background:none;color:var(--mark);font-weight:600;padding:0}
+[data-theme=dark] #toast button{color:#7a5a00}
+
+/* settings */
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--ink);padding:0;width:440px;box-shadow:var(--shadow)}
+dialog::backdrop{background:#0008}
+dialog h2{margin:0;padding:18px 22px 6px;font-size:18px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 22px;border-top:1px solid var(--line)}
+.row small{display:block;color:var(--muted)}
+select,input[type=text],input[type=number]{background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:6px 8px;font:inherit}
+input[type=text]{width:170px}input[type=number]{width:64px}
+dialog footer{padding:14px 22px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);color:var(--muted)}
+@media (max-width:1100px){.btn .t{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header id="top">
+  <div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M8 14h8"/></svg><span>Mi PDF</span></div>
+  <div id="fname"></div>
+  <button class="btn" id="bjs" title="Ver el JavaScript que lleva el PDF por dentro"><i data-i="code"></i><span class="t">Ver JS</span></button>
+  <button class="btn" id="bsave" title="Guardar una copia (Ctrl+S)"><i data-i="save"></i><span class="t">Guardar copia</span></button>
+  <button class="btn" id="bupd" title="Buscar actualizaciones"><i data-i="refresh"></i><span class="t" id="updt">Actualizar</span></button>
+  <button class="btn" id="bset" title="Ajustes" aria-label="Ajustes"><i data-i="gear"></i></button>
+</header>
+
+<div id="main">
+  <aside id="side">
+    <header><span id="selinfo">Páginas</span><button id="ball">Todas</button></header>
+    <div id="thumbs"></div>
+  </aside>
+  <section id="stage">
+    <div id="tools">
+      <button class="btn" id="bopen" title="Abrir otro PDF (Ctrl+O)"><i data-i="open"></i><span class="t">Abrir</span></button>
+      <span class="sep"></span>
+      <button class="btn" id="brot" title="Rotar 90° las páginas elegidas"><i data-i="rotate"></i><span class="t">Rotar</span></button>
+      <button class="btn danger" id="bdel" title="Borrar las páginas elegidas (Supr)"><i data-i="trash"></i><span class="t">Borrar</span></button>
+      <button class="btn" id="bext" title="Guardar las páginas elegidas como un PDF nuevo"><i data-i="extract"></i><span class="t">Extraer</span></button>
+      <button class="btn" id="bsplit" title="Guardar cada página como un PDF aparte"><i data-i="scissors"></i><span class="t">Dividir</span></button>
+      <button class="btn" id="bmerge" title="Añadir las páginas de otro PDF al final"><i data-i="plus"></i><span class="t">Unir</span></button>
+      <span class="sep"></span>
+      <button class="btn" id="btext" title="Haz clic en la página para escribir"><i data-i="text"></i><span class="t">Texto</span></button>
+      <button class="btn" id="bundo" title="Deshacer (Ctrl+Z)" aria-label="Deshacer"><i data-i="undo"></i></button>
+      <span class="sep"></span>
+      <button class="btn" id="bzo" aria-label="Alejar"><i data-i="minus"></i></button>
+      <span id="zoomv">130%</span>
+      <button class="btn" id="bzi" aria-label="Acercar"><i data-i="plus"></i></button>
+    </div>
+    <div id="hint"></div>
+    <div id="viewer"></div>
+    <div id="empty">
+      <div class="drop">
+        <svg class="i" style="width:44px;height:44px" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 17v-6M9 14l3-3 3 3"/></svg>
+        <h1>Suelta un PDF aquí</h1>
+        <p>Léelo, ordénalo, parte sus páginas o añade texto. Todo pasa en tu computadora.</p>
+        <button class="btn solid" id="bopen2"><i data-i="open"></i>Elegir un PDF</button>
+      </div>
+    </div>
+  </section>
+  <aside id="jsp">
+    <header><span>JavaScript del PDF</span><button class="btn" id="bcopy">Copiar</button></header>
+    <pre id="jscode"></pre>
+  </aside>
+</div>
+
+<div id="toast"><span id="tmsg"></span><button id="tact"></button></div>
+
+<dialog id="dset">
+  <h2>Ajustes</h2>
+  <div class="row"><div>Tema<small>Cómo se ve la app</small></div>
+    <select id="s-theme"><option value="system">Como mi sistema</option><option value="light">Claro</option><option value="dark">Oscuro</option></select></div>
+  <div class="row"><div>Zoom al abrir<small>Porcentaje inicial de las páginas</small></div><input type="number" id="s-zoom" min="50" max="250" step="10"></div>
+  <div class="row"><div>Tamaño del texto añadido<small>En puntos</small></div><input type="number" id="s-size" min="6" max="72"></div>
+  <div class="row"><div>Buscar actualizaciones al abrir<small>Avisa si hay una versión nueva</small></div><input type="checkbox" id="s-auto"></div>
+  <div class="row"><div>Repositorio de actualizaciones<small>usuario/repositorio en GitHub</small></div><input type="text" id="s-repo" spellcheck="false"></div>
+  <footer><span id="ver"></span><button class="btn solid" id="sclose">Listo</button></footer>
+</dialog>
+
+<script src="lib/pdf.min.js"></script>
+<script src="lib/pdf-lib.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+const {PDFDocument, StandardFonts, degrees, rgb} = PDFLib;
+const $ = id => document.getElementById(id);
+
+// ---------- iconos ----------
+const ICONS = {
+  code:'<path d="m8 8-5 4 5 4M16 8l5 4-5 4M14 4l-4 16"/>',
+  save:'<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h7V3M8 21v-7h8v7"/>',
+  refresh:'<path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8"/><path d="M3 21v-5h5M21 3v5h-5"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  open:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  rotate:'<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+  trash:'<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/>',
+  extract:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 15h6M13 12l3 3-3 3"/>',
+  scissors:'<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  minus:'<path d="M5 12h14"/>',
+  text:'<path d="M4 7V5h16v2M12 5v14M9 19h6"/>',
+  undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>'
+};
+document.querySelectorAll('i[data-i]').forEach(el => {
+  el.outerHTML = `<svg class="i" viewBox="0 0 24 24">${ICONS[el.dataset.i]}</svg>`;
+});
+
+// ---------- ajustes ----------
+const DEF = {theme:'system', zoom:130, size:14, auto:true, repo:'WallasGMS/MiPDF'};
+const cfg = Object.assign({}, DEF, JSON.parse(localStorage.getItem('mipdf') || '{}'));
+const saveCfg = () => localStorage.setItem('mipdf', JSON.stringify(cfg));
+const dark = matchMedia('(prefers-color-scheme: dark)');
+function aplicarTema() {
+  document.documentElement.dataset.theme = cfg.theme === 'system' ? (dark.matches ? 'dark' : 'light') : cfg.theme;
+}
+dark.onchange = aplicarTema; aplicarTema();
+
+const bind = (id, key, num) => {
+  const el = $(id), chk = el.type === 'checkbox';
+  el[chk ? 'checked' : 'value'] = cfg[key];
+  el.onchange = () => {
+    cfg[key] = chk ? el.checked : num ? Math.max(+el.min, Math.min(+el.max, +el.value || DEF[key])) : el.value.trim() || DEF[key];
+    if (num) el.value = cfg[key];
+    saveCfg(); aplicarTema();
+  };
+};
+bind('s-theme', 'theme'); bind('s-zoom', 'zoom', 1); bind('s-size', 'size', 1); bind('s-auto', 'auto'); bind('s-repo', 'repo');
+$('bset').onclick = () => $('dset').showModal();
+$('sclose').onclick = () => $('dset').close();
+api.version().then(v => $('ver').textContent = 'Mi PDF ' + v);
+
+// ---------- estado ----------
+let bytes, pdf, name = 'documento.pdf', scale = cfg.zoom / 100, tool = null, jsList = [];
+let sel = new Set(), last = -1, undo = [];
+
+function toast(msg, act, fn) {
+  $('tmsg').textContent = msg;
+  const b = $('tact'); b.style.display = act ? '' : 'none'; b.textContent = act || ''; b.onclick = () => { fn(); $('toast').classList.remove('show'); };
+  $('toast').classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => $('toast').classList.remove('show'), 5000);
+}
+
+// ---------- render (perezoso: solo lo visible) ----------
+const io = new IntersectionObserver(es => es.forEach(e => {
+  const c = e.target; if (!e.isIntersecting || c._done) return;
+  c._done = 1; io.unobserve(c);
+  c._doc.getPage(c._n).then(p => p.render({canvasContext: c.getContext('2d'), viewport: p.getViewport({scale: c._k * devicePixelRatio})}));
+}), {rootMargin: '400px'});
+
+function lienzo(doc, p, n, k, cls) {
+  const vp = p.getViewport({scale: k}), c = document.createElement('canvas');
+  c.width = vp.width * devicePixelRatio; c.height = vp.height * devicePixelRatio;
+  c.style.width = vp.width + 'px'; c.style.height = vp.height + 'px';
+  Object.assign(c, {_doc: doc, _n: n, _k: k});
+  io.observe(c); return c;
+}
+
+async function cargar(b, nombre) {
+  bytes = b; if (nombre) name = nombre;
+  const doc = pdf = await pdfjsLib.getDocument({data: b.slice()}).promise;
+  const y = $('viewer').scrollTop;
+  $('viewer').innerHTML = ''; $('thumbs').innerHTML = '';
+  sel = new Set([...sel].filter(i => i < doc.numPages));
+  for (let n = 1; n <= doc.numPages; n++) {
+    if (doc !== pdf) return;
+    const p = await doc.getPage(n), i = n - 1;
+    const pg = document.createElement('div'); pg.className = 'page'; pg.id = 'p' + i;
+    const c = lienzo(doc, p, n, scale); pg.appendChild(c);
+    pg.onclick = e => tool === 'texto' && ponerTexto(pg, c, p, i, e);
+    $('viewer').appendChild(pg);
+    const t = document.createElement('button'); t.className = 'thumb'; t.dataset.i = i;
+    t.append(lienzo(doc, p, n, .2), Object.assign(document.createElement('i'), {textContent: n}));
+    t.onclick = e => elegir(i, e);
+    $('thumbs').appendChild(t);
+  }
+  $('viewer').scrollTop = y;
+  document.body.classList.add('loaded');
+  $('fname').textContent = name;
+  pintarSel();
+  jsList = (await doc.getJavaScript().catch(() => null)) || [];
+  $('bjs').classList.toggle('has', jsList.length > 0);
+  $('bjs').title = jsList.length ? `Este PDF lleva ${jsList.length} script(s)` : 'Este PDF no lleva JavaScript';
+  pintarJS();
+}
+
+function pintarSel() {
+  document.querySelectorAll('.thumb').forEach(t => t.classList.toggle('sel', sel.has(+t.dataset.i)));
+  const n = sel.size, total = pdf ? pdf.numPages : 0;
+  $('selinfo').textContent = n ? `${n} de ${total} elegidas` : `${total} páginas`;
+  $('ball').textContent = n === total && n ? 'Ninguna' : 'Todas';
+  for (const id of ['brot', 'bdel', 'bext']) $(id).disabled = !n;
+  $('bundo').disabled = !undo.length;
+  $('hint').textContent = n || tool ? (tool ? 'Haz clic en la página donde quieres escribir' : '') : 'Elige páginas en la columna de la izquierda (Ctrl o Mayús para varias)';
+}
+
+function elegir(i, e) {
+  if (e.shiftKey && last >= 0) { for (let k = Math.min(i, last); k <= Math.max(i, last); k++) sel.add(k); }
+  else if (e.ctrlKey || e.metaKey) sel.has(i) ? sel.delete(i) : sel.add(i);
+  else { sel = new Set([i]); }
+  last = i; pintarSel();
+  if (!e.ctrlKey && !e.shiftKey) $('p' + i).scrollIntoView({block: 'start'});
+}
+$('ball').onclick = () => { sel = sel.size === pdf.numPages ? new Set() : new Set([...Array(pdf.numPages).keys()]); pintarSel(); };
+
+// ---------- acciones ----------
+async function editar(fn, ok) {
+  try {
+    const doc = await PDFDocument.load(bytes);
+    await fn(doc);
+    undo.push(bytes); if (undo.length > 20) undo.shift();
+    await cargar(await doc.save());
+    toast(ok, 'Deshacer', deshacer);
+  } catch (e) { toast('No se pudo: ' + e.message); }
+}
+function deshacer() { const b = undo.pop(); if (b) cargar(b).then(() => toast('Cambio deshecho')); }
+
+const orden = () => [...sel].sort((a, b) => a - b);
+$('brot').onclick = () => editar(d => orden().forEach(i => { const p = d.getPage(i); p.setRotation(degrees((p.getRotation().angle + 90) % 360)); }), 'Páginas rotadas');
+$('bdel').onclick = () => {
+  if (sel.size >= pdf.numPages) return toast('Deja al menos una página en el documento');
+  const idx = orden().reverse(), n = idx.length; sel = new Set();
+  editar(d => idx.forEach(i => d.removePage(i)), n === 1 ? 'Página borrada' : `${n} páginas borradas`);
+};
+
+async function subdoc(doc, idx) {
+  const n = await PDFDocument.create();
+  (await n.copyPages(doc, idx)).forEach(p => n.addPage(p));
+  return n.save();
+}
+const base = () => name.replace(/\.pdf$/i, '');
+$('bext').onclick = async () => {
+  const f = await api.save(await subdoc(await PDFDocument.load(bytes), orden()), base() + '_extracto.pdf');
+  if (f) toast('Guardado ' + f);
+};
+$('bsplit').onclick = async () => {
+  const doc = await PDFDocument.load(bytes), idx = sel.size ? orden() : [...Array(doc.getPageCount()).keys()], files = [];
+  for (const i of idx) files.push({name: `${base()}_p${i + 1}.pdf`, data: await subdoc(doc, [i])});
+  const n = await api.saveMany(files);
+  if (n) toast(`${n} PDF guardados en la carpeta`);
+};
+$('bmerge').onclick = async () => {
+  const f = await api.open(); if (!f) return;
+  const otro = await PDFDocument.load(f.data);
+  editar(async d => (await d.copyPages(otro, otro.getPageIndices())).forEach(p => d.addPage(p)), `Se añadieron ${otro.getPageCount()} páginas de ${f.name}`);
+};
+$('bsave').onclick = async () => { if (!bytes) return; const f = await api.save(bytes, base() + '_editado.pdf'); if (f) toast('Guardado ' + f); };
+$('bundo').onclick = deshacer;
+
+// texto
+$('btext').onclick = () => { tool = tool ? null : 'texto'; $('btext').classList.toggle('on', !!tool); document.body.classList.toggle('texto', !!tool); pintarSel(); };
+function ponerTexto(pg, c, p, i, e) {
+  if (e.target.classList.contains('tin')) return;
+  const r = c.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  const inp = Object.assign(document.createElement('input'), {className: 'tin'});
+  inp.style.cssText = `left:${x}px;top:${y}px;font-size:${cfg.size * scale}px`;
+  let hecho = false;
+  const fin = async ok => {
+    if (hecho) return; hecho = true;
+    const t = inp.value; inp.remove();
+    if (!ok || !t.trim()) return;
+    const [px, py] = p.getViewport({scale: 1}).convertToPdfPoint(x / scale, y / scale);
+    editar(async d => {
+      const font = await d.embedFont(StandardFonts.Helvetica);
+      // ponytail: sin soporte de páginas rotadas ni caracteres fuera de WinAnsi
+      d.getPage(i).drawText(t, {x: px, y: py, size: cfg.size, font, color: rgb(0, 0, 0)});
+    }, 'Texto añadido');
+  };
+  inp.onkeydown = ev => { if (ev.key === 'Enter') fin(true); if (ev.key === 'Escape') fin(false); };
+  inp.onblur = () => fin(true);
+  pg.appendChild(inp); inp.focus();
+}
+
+// zoom
+function zoom(d) { scale = Math.min(3, Math.max(.4, +(scale + d).toFixed(2))); $('zoomv').textContent = Math.round(scale * 100) + '%'; bytes && cargar(bytes); }
+$('bzi').onclick = () => zoom(.1); $('bzo').onclick = () => zoom(-.1); $('zoomv').textContent = Math.round(scale * 100) + '%';
+
+// JS del PDF
+function pintarJS() {
+  $('jscode').textContent = jsList.length ? jsList.map((s, i) => `// ── script ${i + 1} ──\n${s}`).join('\n\n') : 'Este PDF no lleva JavaScript por dentro.';
+}
+$('bjs').onclick = () => $('jsp').classList.toggle('open');
+$('bcopy').onclick = () => navigator.clipboard.writeText($('jscode').textContent).then(() => toast('Copiado'));
+
+// abrir
+async function abrirArchivo() { const f = await api.open(); if (f) nuevo(f.data, f.name); }
+function nuevo(data, nombre) { undo = []; sel = new Set(); last = -1; cargar(data, nombre).catch(e => toast('No se pudo abrir: ' + e.message)); }
+$('bopen').onclick = $('bopen2').onclick = abrirArchivo;
+document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('over'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('over'); });
+document.addEventListener('drop', async e => {
+  e.preventDefault(); document.body.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f && /\.pdf$/i.test(f.name)) nuevo(new Uint8Array(await f.arrayBuffer()), f.name); else toast('Solo se pueden abrir archivos PDF');
+});
+
+// atajos
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || $('dset').open) return;
+  const c = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+  if (c && k === 'o') abrirArchivo();
+  else if (c && k === 's') { e.preventDefault(); $('bsave').click(); }
+  else if (c && k === 'z') deshacer();
+  else if (c && k === 'a' && pdf) { e.preventDefault(); sel = new Set([...Array(pdf.numPages).keys()]); pintarSel(); }
+  else if (e.key === 'Delete' && sel.size) $('bdel').click();
+});
+
+// ---------- actualizaciones ----------
+let up = {state: 'idle'};
+const LABEL = {idle: 'Actualizar', checking: 'Buscando…', none: 'Estás al día', error: 'Actualizar'};
+function pintarUp() {
+  const s = up.state;
+  $('updt').textContent = s === 'available' ? `Descargar ${up.version}` : s === 'downloading' ? `Descargando ${up.percent}%` : s === 'ready' ? 'Reiniciar e instalar' : LABEL[s];
+  $('bupd').classList.toggle('pulse', s === 'available' || s === 'ready');
+  $('bupd').disabled = s === 'checking' || s === 'downloading';
+}
+$('bupd').onclick = () => {
+  if (up.state === 'available') api.updateDownload();
+  else if (up.state === 'ready') api.updateInstall();
+  else api.updateCheck(cfg.repo);
+};
+api.onUpdate(s => {
+  up = s; pintarUp();
+  if (s.state === 'none') toast('Ya tienes la versión más reciente');
+  if (s.state === 'error') toast(s.msg);
+  if (s.state === 'available') toast(`Hay una versión nueva: ${s.version}`);
+  if (s.state === 'none' || s.state === 'error') setTimeout(() => { up = {state: 'idle'}; pintarUp(); }, 4000);
+});
+if (cfg.auto) api.updateCheck(cfg.repo);
+pintarUp(); pintarSel();
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+{
+  "name": "mi-pdf",
+  "productName": "Mi PDF",
+  "version": "1.0.0",
+  "description": "Visor y editor de PDF personal",
+  "main": "main.js",
+  "author": "WallasGMS",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.wallasgms.mipdf",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "lib/**",
+      "icon.png"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "differentialPackage": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "WallasGMS",
+      "repo": "MiPDF"
+    },
+    "afterPack": "tools/afterPack.js"
+  }
+}
